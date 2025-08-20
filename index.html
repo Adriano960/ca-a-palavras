@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Caça-palavras Backend & SQL</title>
+<style>
+  body { 
+    font-family: Arial, sans-serif; 
+    background: linear-gradient(135deg, #1e1e2e 0%, #23234a 100%);
+    color:#fff; 
+    text-align:center; 
+    margin:0; 
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: 
+      radial-gradient(circle at 20% 30%, #4a90e230 0%, transparent 60%),
+      radial-gradient(circle at 80% 70%, #27ae6030 0%, transparent 60%),
+      radial-gradient(circle at 60% 10%, #fff2 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .frame-container {
+    display: inline-block;
+    margin: 30px auto 0 auto;
+    padding: 24px 32px 32px 32px;
+    border: 8px solid;
+    border-radius: 32px;
+    box-shadow: 0 8px 32px #0004;
+    background: #23234acc;
+    position: relative;
+    z-index: 1;
+    transition: border-color 0.5s, box-shadow 0.5s, border-image 0.5s;
+    border-image-slice: 1;
+    border-image-source: linear-gradient(135deg, #4a90e2, #27ae60);
+  }
+  h1 { 
+    background:#4a90e2; 
+    padding:10px; 
+    margin:0; 
+    border-bottom-left-radius: 20px;
+    border-bottom-right-radius: 20px;
+    box-shadow: 0 4px 16px #0003;
+    position: relative;
+    z-index: 1;
+  }
+  #score,#phase { 
+    font-size:18px; 
+    margin:5px; 
+    position: relative;
+    z-index: 1;
+  }
+  #grid { 
+    display:grid; 
+    gap:2px; 
+    justify-content:center; 
+    margin:20px auto; 
+    position: relative;
+    z-index: 1;
+  }
+  .cell { 
+    width:35px; 
+    height:35px; 
+    background:linear-gradient(135deg, #2d2d3a 60%, #3a3a50 100%);
+    display:flex; 
+    align-items:center; 
+    justify-content:center; 
+    cursor:pointer; 
+    user-select:none; 
+    border-radius:5px; 
+    font-weight:bold; 
+    box-shadow: 0 2px 8px #0002;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  }
+  .cell.selected { 
+    outline:2px solid #4a90e2; 
+    background: #4a90e2cc;
+    color: #fff;
+    box-shadow: 0 0 8px #4a90e2aa;
+  }
+  .cell.found { 
+    background:linear-gradient(135deg, #27ae60 60%, #43e97b 100%);
+    color:#fff; 
+    box-shadow: 0 0 12px #27ae6080;
+  }
+  #words { 
+    max-width:320px; 
+    margin:0 auto; 
+    text-align:left; 
+    background: #23234a99;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px #0002;
+    padding: 8px 0;
+    position: relative;
+    z-index: 1;
+  }
+  #words li { 
+    list-style:none; 
+    padding:6px 8px; 
+    border-bottom:1px solid rgba(255,255,255,.07);
+    transition: color 0.2s, text-decoration 0.2s;
+  }
+  #words li.found { 
+    text-decoration:line-through; 
+    color:#27ae60 
+  }
+  button { 
+    background:#4a90e2; 
+    border:none; 
+    padding:10px 20px; 
+    color:white; 
+    font-size:16px; 
+    cursor:pointer; 
+    margin:15px 0; 
+    border-radius:8px;
+    box-shadow: 0 2px 8px #0002;
+    transition: background 0.2s, box-shadow 0.2s;
+    position: relative;
+    z-index: 1;
+  }
+  button:hover {
+    background: #357ab8;
+    box-shadow: 0 4px 16px #4a90e280;
+  }
+</style>
+</head>
+<body>
+
+<div class="frame-container" id="frameContainer">
+  <h1>Caça-palavras: Backend & SQL</h1>
+  <div id="score">Pontuação: 0</div>
+  <div id="phase">Fase: 1 / 10</div>
+  <div id="grid"></div>
+  <ul id="words"></ul>
+  <button id="nextPhase" style="display:none;">Próxima Fase</button>
+</div>
+
+<script>
+const backgrounds = [
+  "linear-gradient(135deg, #1e1e2e 0%, #23234a 100%)",
+  "linear-gradient(135deg, #23234a 0%, #4a90e2 100%)",
+  "linear-gradient(135deg, #4a90e2 0%, #27ae60 100%)",
+  "linear-gradient(135deg, #27ae60 0%, #f39c12 100%)",
+  "linear-gradient(135deg, #f39c12 0%, #e74c3c 100%)",
+  "linear-gradient(135deg, #e74c3c 0%, #8e44ad 100%)",
+  "linear-gradient(135deg, #8e44ad 0%, #16a085 100%)",
+  "linear-gradient(135deg, #16a085 0%, #2980b9 100%)",
+  "linear-gradient(135deg, #2980b9 0%, #d35400 100%)",
+  "linear-gradient(135deg, #d35400 0%, #2c3e50 100%)",
+  "linear-gradient(135deg, #2c3e50 0%, #1abc9c 100%)",
+  "linear-gradient(135deg, #1abc9c 0%, #e67e22 100%)",
+  "linear-gradient(135deg, #e67e22 0%, #34495e 100%)",
+  "linear-gradient(135deg, #34495e 0%, #9b59b6 100%)",
+  "linear-gradient(135deg, #9b59b6 0%, #f1c40f 100%)",
+  "linear-gradient(135deg, #f1c40f 0%, #e84393 100%)",
+  "linear-gradient(135deg, #e84393 0%, #00b894 100%)",
+  "linear-gradient(135deg, #00b894 0%, #636e72 100%)",
+  "linear-gradient(135deg, #636e72 0%, #fdcb6e 100%)",
+  "linear-gradient(135deg, #fdcb6e 0%, #0984e3 100%)"
+];
+
+// Molduras para cada fase (cores vivas e gradientes)
+const frameBorders = [
+  "linear-gradient(135deg, #4a90e2, #27ae60)",
+  "linear-gradient(135deg, #f39c12, #e74c3c)",
+  "linear-gradient(135deg, #8e44ad, #16a085)",
+  "linear-gradient(135deg, #2980b9, #d35400)",
+  "linear-gradient(135deg, #2c3e50, #1abc9c)",
+  "linear-gradient(135deg, #e67e22, #34495e)",
+  "linear-gradient(135deg, #9b59b6, #f1c40f)",
+  "linear-gradient(135deg, #e84393, #00b894)",
+  "linear-gradient(135deg, #636e72, #fdcb6e)",
+  "linear-gradient(135deg, #fdcb6e, #0984e3)",
+  "linear-gradient(135deg, #23234a, #4a90e2)",
+  "linear-gradient(135deg, #27ae60, #f39c12)",
+  "linear-gradient(135deg, #e74c3c, #8e44ad)",
+  "linear-gradient(135deg, #16a085, #2980b9)",
+  "linear-gradient(135deg, #d35400, #2c3e50)",
+  "linear-gradient(135deg, #1abc9c, #e67e22)",
+  "linear-gradient(135deg, #34495e, #9b59b6)",
+  "linear-gradient(135deg, #f1c40f, #e84393)",
+  "linear-gradient(135deg, #00b894, #636e72)",
+  "linear-gradient(135deg, #4a90e2, #e74c3c)"
+];
+
+function setBackground(phaseIdx) {
+  document.body.style.background = backgrounds[phaseIdx % backgrounds.length];
+  const frame = document.getElementById("frameContainer");
+  frame.style.borderImageSource = frameBorders[phaseIdx % frameBorders.length];
+}
+
+const phases = [
+  {words:["BACKEND","API","ROUTES","DATABASE","QUERY"], size:10},
+  {words:["SELECT","INSERT","UPDATE","DELETE","TABLE"], size:10},
+  {words:["SERVER","JSON","POST","GET","INDEX"], size:10},
+  {words:["PRIMARY","FOREIGN","KEY","RELATION","JOIN"], size:10},
+  {words:["MYSQL","POSTGRES","MONGODB","SQLITE","TRIGGER"], size:10},
+  {words:["CACHE","SESSION","COOKIE","AUTH","TOKEN"], size:10},
+  {words:["LINUX","SHELL","SCRIPT","BASH","CRON"], size:10},
+  {words:["PYTHON","NODEJS","JAVASCRIPT","JAVA","PHP"], size:10},
+  {words:["FRAMEWORK","LARAVEL","EXPRESS","SPRING","DJANGO"], size:10},
+  {words:["APIREST","GRAPHQL","ENDPOINT","CLIENT","REQUEST"], size:10},
+  // Novas fases adicionadas
+  {words:["ORM","MIGRATION","SEED","SCHEMA","ENTITY"], size:10},
+  {words:["INDEXES","VIEW","PROCEDURE","FUNCTION","CURSOR"], size:10},
+  {words:["TRANSACTION","ROLLBACK","COMMIT","LOCK","ISOLATION"], size:10},
+  {words:["REPLICATION","SHARDING","BACKUP","RESTORE","DUMP"], size:10},
+  {words:["CONNECTION","POOL","LATENCY","THROUGHPUT","TIMEOUT"], size:10},
+  {words:["HASH","ENCRYPT","DECRYPT","SSL","CERTIFICATE"], size:10},
+  {words:["MONITOR","LOG","METRIC","ALERT","DASHBOARD"], size:10},
+  {words:["CLOUD","AWS","AZURE","GCP","DEPLOY"], size:10},
+  {words:["DOCKER","CONTAINER","IMAGE","VOLUME","NETWORK"], size:10},
+  {words:["PIPELINE","CI","CD","TEST","BUILD"], size:10}
+];
+
+let currentPhase = 0;
+let score = 0;
+let selectedCells = [];
+let foundSet = new Set();   // controla palavras já encontradas na fase
+
+const gridElement  = document.getElementById("grid");
+const wordsElement = document.getElementById("words");
+const scoreElement = document.getElementById("score");
+const phaseElement = document.getElementById("phase");
+const nextButton   = document.getElementById("nextPhase");
+
+// Colocação segura permitindo cruzamentos com letras iguais
+function tryPlaceWord(grid, word, size) {
+  let attempts = 0;
+  while (attempts < 300) {
+    attempts++;
+    const dir = Math.floor(Math.random()*3); // 0=→, 1=↓, 2=↘
+    const row = Math.floor(Math.random()*size);
+    const col = Math.floor(Math.random()*size);
+
+    const dr = (dir===0)?0:(dir===1?1:1);
+    const dc = (dir===0)?1:(dir===1?0:1);
+
+    if (row + dr*(word.length-1) >= size || col + dc*(word.length-1) >= size) continue;
+
+    let ok = true;
+    for (let i=0;i<word.length;i++){
+      const r = row + dr*i, c = col + dc*i;
+      const cell = grid[r][c];
+      if (cell !== "" && cell !== word[i]) { ok = false; break; }
+    }
+    if (!ok) continue;
+
+    for (let i=0;i<word.length;i++){
+      const r = row + dr*i, c = col + dc*i;
+      grid[r][c] = word[i];
+    }
+    return true;
+  }
+  return false;
+}
+
+function generateGrid(size, words) {
+  gridElement.innerHTML = "";
+  gridElement.style.gridTemplateColumns = `repeat(${size}, 35px)`;
+  selectedCells = [];
+  foundSet = new Set();
+
+  const grid = Array.from({length:size}, ()=>Array(size).fill(""));
+
+  // coloca palavras
+  words.forEach(w => {
+    if (!tryPlaceWord(grid, w, size)) console.warn("Falha ao posicionar:", w);
+  });
+
+  // completa com letras
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (let r=0;r<size;r++){
+    for (let c=0;c<size;c++){
+      if (!grid[r][c]) grid[r][c] = letters[Math.floor(Math.random()*letters.length)];
+    }
+  }
+
+  // renderiza grade
+  for (let r=0;r<size;r++){
+    for (let c=0;c<size;c++){
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.textContent = grid[r][c];
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      cell.addEventListener("click", () => selectCell(cell, words));
+      gridElement.appendChild(cell);
+    }
+  }
+
+  // lista de palavras
+  wordsElement.innerHTML = "";
+  words.forEach(w => {
+    const li = document.createElement("li");
+    li.textContent = w;
+    li.id = `phase${currentPhase}-word-${w}`;
+    wordsElement.appendChild(li);
+  });
+}
+
+// valida se a seleção segue direção constante (→, ←, ↑, ↓, diagonais)
+function isValidDirection(cells) {
+  if (cells.length < 2) return true;
+  const r0 = Number(cells[0].dataset.row), c0 = Number(cells[0].dataset.col);
+  const r1 = Number(cells[1].dataset.row), c1 = Number(cells[1].dataset.col);
+  const dr = Math.sign(r1 - r0);
+  const dc = Math.sign(c1 - c0);
+  // passo deve ser -1, 0 ou 1; (0,0) só no primeiro clique
+  if (dr===0 && dc===0) return false;
+  for (let i=1;i<cells.length;i++){
+    const rPrev = Number(cells[i-1].dataset.row), cPrev = Number(cells[i-1].dataset.col);
+    const rCur  = Number(cells[i].dataset.row),  cCur  = Number(cells[i].dataset.col);
+    if (rCur - rPrev !== dr || cCur - cPrev !== dc) return false;
+  }
+  return true;
+}
+
+function clearSelection() {
+  selectedCells.forEach(c => c.classList.remove("selected"));
+  selectedCells = [];
+}
+
+function selectCell(cell, words) {
+  // ⚠️ Permitimos clicar em células já encontradas (para cruzamentos)
+  if (cell.classList.contains("selected")) {
+    cell.classList.remove("selected");
+    selectedCells = selectedCells.filter(c => c !== cell);
+  } else {
+    cell.classList.add("selected");
+    selectedCells.push(cell);
+  }
+
+  if (!isValidDirection(selectedCells)) {
+    clearSelection();
+    return;
+  }
+
+  const selectedWord = selectedCells.map(c => c.textContent).join("");
+  const reverseWord  = selectedWord.split("").reverse().join("");
+
+  if (words.includes(selectedWord) || words.includes(reverseWord)) {
+    const finalWord = words.includes(selectedWord) ? selectedWord : reverseWord;
+
+    // evita repetir palavra (sem pontos duplicados)
+    if (foundSet.has(finalWord)) {
+      clearSelection();
+      return;
+    }
+
+    foundSet.add(finalWord);
+    score += 10;
+    scoreElement.textContent = `Pontuação: ${score}`;
+
+    // marca células como encontradas (as que já eram permanecem)
+    selectedCells.forEach(c => { c.classList.remove("selected"); c.classList.add("found"); });
+    document.getElementById(`phase${currentPhase}-word-${finalWord}`)?.classList.add("found");
+    selectedCells = [];
+
+    // fim da fase?
+    if (foundSet.size === words.length) {
+      if (currentPhase < phases.length - 1) {
+        nextButton.style.display = "inline-block";
+      } else {
+        alert("🎉 Parabéns! Você completou todas as fases!");
+      }
+    }
+  }
+}
+
+nextButton.addEventListener("click", () => {
+  currentPhase++;
+  phaseElement.textContent = `Fase: ${currentPhase+1} / ${phases.length}`;
+  nextButton.style.display = "none";
+  setBackground(currentPhase);
+  generateGrid(phases[currentPhase].size, phases[currentPhase].words);
+});
+
+// inicializa
+phaseElement.textContent = `Fase: 1 / ${phases.length}`;
+setBackground(0);
+generateGrid(phases[0].size, phases[0].words);
+</script>
+</body>
+</html>
